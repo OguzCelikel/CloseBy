@@ -34,6 +34,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     
     // Selected location for annotation
     @Published var selectedLocationCoordinate: CLLocationCoordinate2D?
+    @Published var isShowingSearchSheet = false
     
     override init() {
         super.init()
@@ -156,6 +157,28 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     func resetAfterSheetDismissal() {
         shouldUpdateRegion = true
         selectedLocationCoordinate = nil // Clear the selected location
+    }
+    
+    // Set selected place from search results
+    func setSelectedPlace(_ place: PlaceInfo) {
+        // Set flag to prevent automatic region updates
+        shouldUpdateRegion = false
+        
+        // Set the selected location for annotation
+        selectedLocationCoordinate = place.coordinate
+        
+        // Update region to center on the selected location
+        region = MKCoordinateRegion(
+            center: place.coordinate,
+            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+        )
+        
+        // Update selected place and show place sheet
+        selectedPlace = place
+        isShowingPlaceSheet = true
+        
+        // Hide search sheet
+        isShowingSearchSheet = false
     }
 }
 

@@ -12,7 +12,7 @@ struct ContentView: View {
     @StateObject var locationManager = LocationManager()
     
     var body: some View {
-        ZStack(alignment: .topTrailing) {
+        ZStack(alignment: .bottom) {
             // MapView with long press handler and selected location annotation
             MapView(
                 region: $locationManager.region,
@@ -24,23 +24,51 @@ struct ContentView: View {
             )
             .edgesIgnoringSafeArea(.all)
             
-            // Floating location button (Apple Maps style)
+            // Search button (Apple Maps style)
             Button(action: {
-                if let location = locationManager.lastLocation {
-                    locationManager.centerOnUserLocation()
-                }
+                locationManager.isShowingSearchSheet = true
             }) {
-                Image(systemName: "location.fill")
-                    .font(.system(size: 16))
-                    .padding(12)
-                    .background(Color.white)
-                    .foregroundColor(.blue)
-                    .clipShape(Circle())
-                    .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(Color.gray)
+                    Text("Search in map")
+                        .fontWeight(.medium)
+                        .foregroundColor(Color.gray)
+                    Spacer()
+                }
+                .padding()
+                .background(Color.white)
+                .foregroundColor(.primary)
+                .cornerRadius(10)
+                .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
+                .padding(.horizontal)
+                .padding(.bottom, 16)
             }
-            .padding(.trailing, 16)
-            .padding(.top, 60) // Positioned below status bar
-            .opacity(locationManager.lastLocation != nil ? 1.0 : 0.0) // Only show when location is available
+            
+            // Floating location button (top right)
+            VStack {
+                HStack {
+                    Spacer()
+                    Button(action: {
+                        if let location = locationManager.lastLocation {
+                            locationManager.centerOnUserLocation()
+                        }
+                    }) {
+                        Image(systemName: "location.fill")
+                            .font(.system(size: 16))
+                            .padding(12)
+                            .background(Color.white)
+                            .foregroundColor(.blue)
+                            .clipShape(Circle())
+                            .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
+                    }
+                    .padding(.trailing, 16)
+                    .opacity(locationManager.lastLocation != nil ? 1.0 : 0.0)
+                }
+                .padding(.top, 60) // Position below status bar
+                
+                Spacer()
+            }
             
             // Permission denied warning panel
             if locationManager.locationStatus == .denied || locationManager.locationStatus == .restricted {
@@ -68,6 +96,7 @@ struct ContentView: View {
                 .cornerRadius(12)
                 .shadow(radius: 5)
                 .padding()
+                .zIndex(1) // Make sure this appears above other elements
             }
         }
         .onAppear {
@@ -76,7 +105,6 @@ struct ContentView: View {
         .sheet(
             isPresented: $locationManager.isShowingPlaceSheet,
             onDismiss: {
-                // Reset after sheet is dismissed
                 locationManager.resetAfterSheetDismissal()
             },
             content: {
@@ -85,13 +113,20 @@ struct ContentView: View {
                         // Handle "Start Navigation" button tap
                         print("Starting navigation to: \(selectedPlace.name)")
                         
-                        // Use Apple Maps to navigate to the location
                         let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: selectedPlace.coordinate))
                         mapItem.name = selectedPlace.name
                         mapItem.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving])
                     }
                     .presentationDetents([.height(250), .medium])
                 }
+            }
+        )
+        .sheet(
+            isPresented: $locationManager.isShowingSearchSheet,
+            content: {
+                SearchBottomSheetView(locationManager: locationManager)
+                    .presentationDetents([.height(300), .medium, .large])
+                    .presentationDragIndicator(.visible)
             }
         )
     }
