@@ -12,12 +12,37 @@ struct ContentView: View {
     @StateObject var locationManager = LocationManager()
     
     var body: some View {
-        ZStack(alignment: .top) {
-            // MapView
-            MapView(region: $locationManager.region, userLocation: locationManager.lastLocation)
-                .edgesIgnoringSafeArea(.all)
+        ZStack(alignment: .topTrailing) {
+            // MapView with long press handler and selected location annotation
+            MapView(
+                region: $locationManager.region,
+                userLocation: locationManager.lastLocation,
+                selectedLocation: locationManager.selectedLocationCoordinate,
+                onLongPress: { coordinate in
+                    locationManager.handleMapLongPress(at: coordinate)
+                }
+            )
+            .edgesIgnoringSafeArea(.all)
             
-            // İzin yoksa uyarı paneli göster
+            // Floating location button (Apple Maps style)
+            Button(action: {
+                if let location = locationManager.lastLocation {
+                    locationManager.centerOnUserLocation()
+                }
+            }) {
+                Image(systemName: "location.fill")
+                    .font(.system(size: 16))
+                    .padding(12)
+                    .background(Color.white)
+                    .foregroundColor(.blue)
+                    .clipShape(Circle())
+                    .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
+            }
+            .padding(.trailing, 16)
+            .padding(.top, 60) // Positioned below status bar
+            .opacity(locationManager.lastLocation != nil ? 1.0 : 0.0) // Only show when location is available
+            
+            // Permission denied warning panel
             if locationManager.locationStatus == .denied || locationManager.locationStatus == .restricted {
                 VStack {
                     Text("Location Permission Denied")
@@ -44,47 +69,31 @@ struct ContentView: View {
                 .shadow(radius: 5)
                 .padding()
             }
-            
-            // Konum bilgileri paneli
-            if let location = locationManager.lastLocation {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Your Location")
-                        .font(.headline)
-                    
-                    HStack {
-                        VStack(alignment: .leading) {
-                            Text("Latitude: \(String(format: "%.6f", location.coordinate.latitude))")
-                            Text("Longitude: \(String(format: "%.6f", location.coordinate.longitude))")
-                        }
-                        
-                        Spacer()
-                        
-                        Button(action: {
-                            // Haritayı kullanıcı konumuna merkezle
-                            locationManager.region = MKCoordinateRegion(
-                                center: location.coordinate,
-                                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-                            )
-                        }) {
-                            Image(systemName: "location.fill")
-                                .padding(10)
-                                .background(Color.blue)
-                                .foregroundColor(.white)
-                                .clipShape(Circle())
-                        }
-                    }
-                }
-                .padding()
-                .background(Color.white.opacity(0.9))
-                .cornerRadius(12)
-                .shadow(radius: 5)
-                .padding()
-                .padding(.bottom, 20)
-            }
         }
         .onAppear {
             locationManager.checkPermission()
         }
+        .sheet(
+            isPresented: $locationManager.isShowingPlaceSheet,
+            onDismiss: {
+                // Reset after sheet is dismissed
+                locationManager.resetAfterSheetDismissal()
+            },
+            content: {
+                if let selectedPlace = locationManager.selectedPlace {
+                    PlaceInfoSheet(placeInfo: selectedPlace) {
+                        // Handle "Start Navigation" button tap
+                        print("Starting navigation to: \(selectedPlace.name)")
+                        
+                        // Use Apple Maps to navigate to the location
+                        let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: selectedPlace.coordinate))
+                        mapItem.name = selectedPlace.name
+                        mapItem.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving])
+                    }
+                    .presentationDetents([.height(250), .medium])
+                }
+            }
+        )
     }
 }
 

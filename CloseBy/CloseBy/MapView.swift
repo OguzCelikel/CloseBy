@@ -11,26 +11,36 @@ import MapKit
 struct MapView: UIViewRepresentable {
     @Binding var region: MKCoordinateRegion
     var userLocation: CLLocation?
+    var selectedLocation: CLLocationCoordinate2D? // Selected location to show annotation
+    var onLongPress: (CLLocationCoordinate2D) -> Void
     
     func makeUIView(context: Context) -> MKMapView {
         let mapView = MKMapView()
         mapView.delegate = context.coordinator
-        mapView.showsUserLocation = true
+        mapView.showsUserLocation = true // This shows the blue circle for user's location
+        
+        // Add long press gesture recognizer
+        let longPressGesture = UILongPressGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handleLongPress(_:))
+        )
+        mapView.addGestureRecognizer(longPressGesture)
+        
         return mapView
     }
     
     func updateUIView(_ view: MKMapView, context: Context) {
         view.setRegion(region, animated: true)
         
-        // Diğer annotationları temizle
+        // Clear all custom annotations
         let annotations = view.annotations.filter { !($0 is MKUserLocation) }
         view.removeAnnotations(annotations)
         
-        // Kullanıcının konumunu ekle
-        if let location = userLocation {
+        // Add annotation only for selected location
+        if let selectedLocation = selectedLocation {
             let annotation = MKPointAnnotation()
-            annotation.coordinate = location.coordinate
-            annotation.title = "Your Location"
+            annotation.coordinate = selectedLocation
+            annotation.title = "Selected Location"
             view.addAnnotation(annotation)
         }
     }
@@ -46,17 +56,30 @@ struct MapView: UIViewRepresentable {
             self.parent = parent
         }
         
+        @objc func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
+            if gesture.state == .began {
+                let mapView = gesture.view as! MKMapView
+                let touchPoint = gesture.location(in: mapView)
+                let coordinate = mapView.convert(touchPoint, toCoordinateFrom: mapView)
+                
+                // Call the closure with the coordinate
+                parent.onLongPress(coordinate)
+            }
+        }
+        
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
             if annotation is MKUserLocation {
-                return nil // Varsayılan kullanıcı konum imlecini kullan
+                return nil // Use default user location marker (blue circle)
             }
             
-            let identifier = "CustomPin"
-            var annotationView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
+            // Custom pin for selected location
+            let identifier = "SelectedLocationPin"
+            var annotationView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) as? MKMarkerAnnotationView
             
             if annotationView == nil {
                 annotationView = MKMarkerAnnotationView(annotation: annotation, reuseIdentifier: identifier)
                 annotationView?.canShowCallout = true
+                annotationView?.markerTintColor = .red // Make the pin red
             } else {
                 annotationView?.annotation = annotation
             }
