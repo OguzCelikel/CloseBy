@@ -36,6 +36,16 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published var selectedLocationCoordinate: CLLocationCoordinate2D?
     @Published var isShowingSearchSheet = false
     
+    // For distance tracking
+    @Published var isDistanceTrackingActive = false
+    @Published var trackedDestination: PlaceInfo?
+    @Published var distanceToDestination: Double?
+    @Published var isShowingDistanceSheet = false
+    @Published var routeLine: MKPolyline?
+    
+    @Published var initialDistanceToDestination: Double?
+
+    
     override init() {
         super.init()
         locationManager.delegate = self
@@ -66,20 +76,22 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
     }
     
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let location = locations.last else { return }
-        lastLocation = location
-        
-        // Only update region if we're not showing a place sheet
-        if shouldUpdateRegion {
-            DispatchQueue.main.async {
-                self.region = MKCoordinateRegion(
-                    center: location.coordinate,
-                    span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-                )
-            }
-        }
-    }
+//    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+//        guard let location = locations.last else { return }
+//        lastLocation = location
+//        
+//        // Only update region if we're not showing a place sheet
+//        if shouldUpdateRegion {
+//            DispatchQueue.main.async {
+//                self.region = MKCoordinateRegion(
+//                    center: location.coordinate,
+//                    span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+//                )
+//            }
+//        }
+//    }
+    
+
     
     // Handle long press on map
     func handleMapLongPress(at coordinate: CLLocationCoordinate2D) {
@@ -179,6 +191,133 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         
         // Hide search sheet
         isShowingSearchSheet = false
+    }
+    
+    
+    // Modify the startDistanceTracking function
+    func startDistanceTracking(to destination: PlaceInfo) {
+        trackedDestination = destination
+        isDistanceTrackingActive = true
+        
+        // Calculate and store initial distance
+        updateDistanceToDestination()
+        if let distance = distanceToDestination {
+            initialDistanceToDestination = distance
+        }
+        
+        isShowingDistanceSheet = true
+        
+        // Draw a line on the map between current location and destination
+        updateRouteLine()
+    }
+
+    // Modify the stopDistanceTracking function
+    func stopDistanceTracking() {
+        trackedDestination = nil
+        isDistanceTrackingActive = false
+        distanceToDestination = nil
+        initialDistanceToDestination = nil
+        routeLine = nil
+        isShowingDistanceSheet = false
+        selectedLocationCoordinate = nil
+    }
+
+    // Update the distance calculation
+    private func updateDistanceToDestination() {
+        guard let destination = trackedDestination?.coordinate,
+              let currentLocation = lastLocation?.coordinate else {
+            distanceToDestination = nil
+            return
+        }
+        
+        // Create CLLocation objects for distance calculation
+        let destLocation = CLLocation(latitude: destination.latitude, longitude: destination.longitude)
+        let userLocation = CLLocation(latitude: currentLocation.latitude, longitude: currentLocation.longitude)
+        
+        // Calculate distance in meters
+        distanceToDestination = userLocation.distance(from: destLocation)
+        
+        // Update route line
+        updateRouteLine()
+    }
+
+    // Update the line shown on the map
+    private func updateRouteLine() {
+        guard let destination = trackedDestination?.coordinate,
+              let currentLocation = lastLocation?.coordinate else {
+            routeLine = nil
+            return
+        }
+        
+        let points = [currentLocation, destination]
+        routeLine = MKPolyline(coordinates: points, count: points.count)
+        
+        // If needed, adjust map to show both points
+        if isDistanceTrackingActive {
+            // Calculate midpoint and span to show both points
+            let midLat = (currentLocation.latitude + destination.latitude) / 2
+            let midLon = (currentLocation.longitude + destination.longitude) / 2
+            
+            let latDelta = abs(currentLocation.latitude - destination.latitude) * 1.5
+            let lonDelta = abs(currentLocation.longitude - destination.longitude) * 1.5
+            
+            let region = MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: midLat, longitude: midLon),
+                span: MKCoordinateSpan(latitudeDelta: max(0.005, latDelta), longitudeDelta: max(0.005, lonDelta))
+            )
+            
+            // Update region
+            DispatchQueue.main.async {
+                self.shouldUpdateRegion = false
+                self.region = region
+            }
+        }
+    }
+
+    // Center the map on the route
+    func centerOnRoute() {
+        guard let destination = trackedDestination?.coordinate,
+              let currentLocation = lastLocation?.coordinate else { return }
+        
+        // Calculate midpoint and span to show both points
+        let midLat = (currentLocation.latitude + destination.latitude) / 2
+        let midLon = (currentLocation.longitude + destination.longitude) / 2
+        
+        let latDelta = abs(currentLocation.latitude - destination.latitude) * 1.5
+        let lonDelta = abs(currentLocation.longitude - destination.longitude) * 1.5
+        
+        let region = MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: midLat, longitude: midLon),
+            span: MKCoordinateSpan(latitudeDelta: max(0.005, latDelta), longitudeDelta: max(0.005, lonDelta))
+        )
+        
+        // Update region
+        DispatchQueue.main.async {
+            self.shouldUpdateRegion = false
+            self.region = region
+        }
+    }
+    
+    // Update the existing locationManager delegate method to call this
+    // Add this to your locationManager(_:didUpdateLocations:) method
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let location = locations.last else { return }
+        lastLocation = location
+        
+        // Update distance if tracking is active
+        if isDistanceTrackingActive {
+            updateDistanceToDestination()
+        }
+        
+        // Only update region if we're not showing a place sheet or tracking distance
+        if shouldUpdateRegion && !isDistanceTrackingActive {
+            DispatchQueue.main.async {
+                self.region = MKCoordinateRegion(
+                    center: location.coordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                )
+            }
+        }
     }
 }
 

@@ -8,10 +8,13 @@
 import SwiftUI
 import MapKit
 
+// Update your MapView to include the route line
+
 struct MapView: UIViewRepresentable {
     @Binding var region: MKCoordinateRegion
     var userLocation: CLLocation?
     var selectedLocation: CLLocationCoordinate2D? // Selected location to show annotation
+    var routeLine: MKPolyline? // Add this property
     var onLongPress: (CLLocationCoordinate2D) -> Void
     
     func makeUIView(context: Context) -> MKMapView {
@@ -32,6 +35,9 @@ struct MapView: UIViewRepresentable {
     func updateUIView(_ view: MKMapView, context: Context) {
         view.setRegion(region, animated: true)
         
+        // Clear existing overlays
+        view.removeOverlays(view.overlays)
+        
         // Clear all custom annotations
         let annotations = view.annotations.filter { !($0 is MKUserLocation) }
         view.removeAnnotations(annotations)
@@ -42,6 +48,11 @@ struct MapView: UIViewRepresentable {
             annotation.coordinate = selectedLocation
             annotation.title = "Selected Location"
             view.addAnnotation(annotation)
+        }
+        
+        // Add route line if tracking is active
+        if let routeLine = routeLine {
+            view.addOverlay(routeLine)
         }
     }
     
@@ -68,8 +79,9 @@ struct MapView: UIViewRepresentable {
         }
         
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+            // Use default blue dot for user location
             if annotation is MKUserLocation {
-                return nil // Use default user location marker (blue circle)
+                return nil
             }
             
             // Custom pin for selected location
@@ -85,6 +97,17 @@ struct MapView: UIViewRepresentable {
             }
             
             return annotationView
+        }
+        
+        // Add this method to render the route line
+        func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+            if let polyline = overlay as? MKPolyline {
+                let renderer = MKPolylineRenderer(polyline: polyline)
+                renderer.strokeColor = .blue
+                renderer.lineWidth = 4
+                return renderer
+            }
+            return MKOverlayRenderer()
         }
     }
 }

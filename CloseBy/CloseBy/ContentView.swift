@@ -18,6 +18,7 @@ struct ContentView: View {
                 region: $locationManager.region,
                 userLocation: locationManager.lastLocation,
                 selectedLocation: locationManager.selectedLocationCoordinate,
+                routeLine: locationManager.routeLine,
                 onLongPress: { coordinate in
                     locationManager.handleMapLongPress(at: coordinate)
                 }
@@ -109,15 +110,8 @@ struct ContentView: View {
             },
             content: {
                 if let selectedPlace = locationManager.selectedPlace {
-                    PlaceInfoSheet(placeInfo: selectedPlace) {
-                        // Handle "Start Navigation" button tap
-                        print("Starting navigation to: \(selectedPlace.name)")
-                        
-                        let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: selectedPlace.coordinate))
-                        mapItem.name = selectedPlace.name
-                        mapItem.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving])
-                    }
-                    .presentationDetents([.height(250), .medium])
+                    PlaceInfoSheet(locationManager: locationManager, placeInfo: selectedPlace)
+                        .presentationDetents([.height(250), .medium])
                 }
             }
         )
@@ -126,6 +120,17 @@ struct ContentView: View {
             content: {
                 SearchBottomSheetView(locationManager: locationManager)
                     .presentationDetents([.height(300), .medium, .large])
+                    .presentationDragIndicator(.visible)
+            }
+        )
+        .sheet(
+            isPresented: $locationManager.isShowingDistanceSheet,
+            onDismiss: {
+                locationManager.stopDistanceTracking()
+            },
+            content: {
+                DistanceTrackerSheet(locationManager: locationManager)
+                    .presentationDetents([.medium])
                     .presentationDragIndicator(.visible)
             }
         )
